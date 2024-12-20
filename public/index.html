@@ -52,15 +52,14 @@
             this.vy = 0;
             this.width = 50;
             this.height = 50;
-            this.mask = globalMask; // Используем уже готовую маску
-            this.stable = false;    // Флаг стабильности
+            this.mask = globalMask; 
+            this.stable = false;  
         }
 
         applyGravity() {
             this.vy += gravity;
         }
 
-        // Проверка пересечения по ограничивающим прямоугольникам (AABB)
         aabbCollide(other) {
             return !(this.x + this.width <= other.x ||
                      this.x >= other.x + other.width ||
@@ -68,7 +67,6 @@
                      this.y >= other.y + other.height);
         }
 
-        // Пиксель-перфект проверка. Предполагается, что перед этим уже пройдена AABB проверка.
         pixelPerfectCollide(other) {
             for (let { x, y } of this.mask) {
                 const globalX = (this.x | 0) + x;
@@ -76,14 +74,12 @@
                 for (let { x: ox, y: oy } of other.mask) {
                     const otherX = (other.x | 0) + ox;
                     const otherY = (other.y | 0) + oy;
-
                     if (globalX === otherX && globalY === otherY) return true;
                 }
             }
             return false;
         }
 
-        // Проверка коллизий с другими объектами
         checkCollisionsAt(yPos) {
             const oldY = this.y;
             this.y = yPos;
@@ -108,7 +104,6 @@
             return yPos + this.height > canvas.height;
         }
 
-        // Двоичный поиск для определения оптимальной позиции без глубокой коллизии
         resolveCollisions(oldY, newY) {
             if (!this.checkCollisionsAt(newY) && !this.causesFloorCollision(newY)) {
                 return newY; 
@@ -135,7 +130,6 @@
         }
 
         update() {
-            // Если объект стабилен, пропускаем сложные вычисления
             if (this.stable) return;
 
             const oldY = this.y;
@@ -145,11 +139,10 @@
             const resolvedY = this.resolveCollisions(oldY, newY);
             this.y = resolvedY;
 
-            // Проверяем, остановился ли объект
             if (this.checkCollisionsAt(this.y) || this.causesFloorCollision(this.y) || resolvedY !== newY) {
                 this.y = Math.floor(this.y);
                 this.vy = 0;
-                this.stable = true; // Объект стал стабильным
+                this.stable = true; 
             }
         }
 
@@ -158,13 +151,13 @@
         }
     }
 
-    // Добавление новых объектов по клику
     canvas.addEventListener("click", (e) => {
         const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const centerX = e.clientX - rect.left;
+        const centerY = e.clientY - rect.top;
 
-        objects.push(new Diamond(x, y));
+        // Центрируем объект по точке клика
+        objects.push(new Diamond(centerX - 25, centerY - 25));
     });
 
     function animate() {
@@ -177,7 +170,6 @@
     }
 
     image.onload = () => {
-        // Генерируем маску один раз
         globalMask = createGlobalMask(image, 50, 50);
         animate();
     };
