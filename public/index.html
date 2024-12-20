@@ -1,44 +1,102 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Pixel Perfect Stack</title>
     <style>
-        body, html { margin: 0; padding: 0; overflow: hidden; background-color: #f0f0f0; }
-        canvas { display: block; }
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background-color: #f0f0f0; 
+            font-family: Arial, sans-serif;
+        }
+        
+        #appContainer {
+            display: flex;
+            flex-direction: row;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #controlPanel {
+            width: 20%;
+            background: #333;
+            color: #fff;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #controlPanel h1 {
+            font-size: 18px;
+            margin-top: 0;
+        }
+
+        #controlPanel .info-section {
+            margin-bottom: 20px;
+        }
+
+        #canvasContainer {
+            width: 80%;
+            position: relative;
+        }
+
+        canvas { 
+            display: block; 
+            background-color: #f0f0f0; 
+        }
     </style>
 </head>
 <body>
-<canvas id="fallingCanvas"></canvas>
+<div id="appContainer">
+    <div id="controlPanel">
+        <h1>Game Panel</h1>
+        <div class="info-section">
+            <h2>Instructions</h2>
+            <p>Click inside the canvas area to place a gem. Gems will fall onto the floor and stack upon each other.</p>
+        </div>
+        <div class="info-section">
+            <h2>Player Info</h2>
+            <p><strong>Score:</strong> 1230</p>
+            <p><strong>Objects Placed:</strong> 5</p>
+        </div>
+        <div class="info-section">
+            <h2>Controls</h2>
+            <p>Click: Place an object</p>
+            <p>Future controls can go here...</p>
+        </div>
+    </div>
+    <div id="canvasContainer">
+        <canvas id="fallingCanvas"></canvas>
+    </div>
+</div>
 <script>
     const canvas = document.getElementById("fallingCanvas");
     const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = window.innerWidth * 0.8; // 80% width
+    canvas.height = window.innerHeight; 
 
     const gravity = 0.5;
     const objects = [];
 
-    // Загружаем три изображения
+    // Load images
     const images = {
         diamond: { src: "diamond.png", image: new Image() },
         emerald: { src: "emerald.png", image: new Image() },
         ruby: { src: "ruby.png", image: new Image() }
     };
 
-    // Задаём ширину/высоту объекта (предполагается одинаковый размер для всех)
     const OBJ_WIDTH = 50;
     const OBJ_HEIGHT = 50;
 
-    // Подгружаем все изображения
     for (let key in images) {
         images[key].image.src = images[key].src;
     }
 
     let masks = {};
 
-    // Функция для создания маски пикселей
+    // Create mask for pixel-perfect collision
     function createMask(img, width, height) {
         const offscreen = document.createElement("canvas");
         const offCtx = offscreen.getContext("2d");
@@ -115,7 +173,7 @@
         }
 
         causesFloorCollision(yPos) {
-            return yPos + this.height > canvas.height;
+            return yPos + this.height > canvas.height - floorHeight;
         }
 
         resolveCollisions(oldY, newY) {
@@ -166,8 +224,7 @@
     }
 
     function placeObject(x, y) {
-        // Выбираем рандомно один из ключей
-        const types = Object.keys(images); // ["diamond", "emerald", "ruby"]
+        const types = Object.keys(images); 
         const choice = types[Math.floor(Math.random() * types.length)];
 
         const obj = new Gem(x, y, images[choice].image, masks[choice]);
@@ -181,19 +238,38 @@
         if (attempts > 0) {
             objects.push(obj);
         }
-        // Если attempts == 0, значит не удалось разместить без пересечения, просто не добавляем объект.
     }
+
+    const floorHeight = 20; 
+    const wallThickness = 20;
 
     canvas.addEventListener("click", (e) => {
         const rect = canvas.getBoundingClientRect();
         const centerX = e.clientX - rect.left;
         const centerY = e.clientY - rect.top;
 
+        // Place object at click
         placeObject(centerX - 25, centerY - 25);
     });
 
+    function drawBoundaries() {
+        // Draw floor
+        ctx.fillStyle = "#666";
+        ctx.fillRect(0, canvas.height - floorHeight, canvas.width, floorHeight);
+
+        // Draw walls
+        ctx.fillStyle = "#666";
+        ctx.fillRect(0, 0, wallThickness, canvas.height); // left wall
+        ctx.fillRect(canvas.width - wallThickness, 0, wallThickness, canvas.height); // right wall
+    }
+
     function animate() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw floor and walls first
+        drawBoundaries();
+
+        // Update and draw objects
         for (let obj of objects) {
             obj.update();
             obj.draw();
@@ -201,14 +277,13 @@
         requestAnimationFrame(animate);
     }
 
-    // Подгрузка всех изображений и создание масок
     let imagesLoaded = 0;
     for (let key in images) {
         images[key].image.onload = () => {
             masks[key] = createMask(images[key].image, OBJ_WIDTH, OBJ_HEIGHT);
             imagesLoaded++;
             if (imagesLoaded === Object.keys(images).length) {
-                // Все изображения загружены
+                // All images loaded
                 animate();
             }
         };
