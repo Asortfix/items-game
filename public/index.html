@@ -20,13 +20,26 @@
     const gravity = 0.5;
     const objects = [];
 
-    const image = new Image();
-    image.src = "image.png";
+    // Загружаем три изображения
+    const images = {
+        diamond: { src: "diamond.png", image: new Image() },
+        emerald: { src: "emerald.png", image: new Image() },
+        ruby: { src: "ruby.png", image: new Image() }
+    };
 
-    let globalMask = null; // Глобальная маска, будет вычислена один раз
+    // Задаём ширину/высоту объекта (предполагается одинаковый размер для всех)
+    const OBJ_WIDTH = 50;
+    const OBJ_HEIGHT = 50;
 
-    // Создаём маску для всех объектов
-    function createGlobalMask(img, width, height) {
+    // Подгружаем все изображения
+    for (let key in images) {
+        images[key].image.src = images[key].src;
+    }
+
+    let masks = {};
+
+    // Функция для создания маски пикселей
+    function createMask(img, width, height) {
         const offscreen = document.createElement("canvas");
         const offCtx = offscreen.getContext("2d");
         offscreen.width = width;
@@ -45,15 +58,16 @@
         return mask;
     }
 
-    class Diamond {
-        constructor(x, y) {
+    class Gem {
+        constructor(x, y, img, mask) {
             this.x = x;
             this.y = y;
             this.vy = 0;
-            this.width = 50;
-            this.height = 50;
-            this.mask = globalMask; 
+            this.width = OBJ_WIDTH;
+            this.height = OBJ_HEIGHT;
+            this.mask = mask; 
             this.stable = false;  
+            this.img = img; 
         }
 
         applyGravity() {
@@ -147,8 +161,27 @@
         }
 
         draw() {
-            ctx.drawImage(image, this.x, this.y, this.width, this.height);
+            ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
         }
+    }
+
+    function placeObject(x, y) {
+        // Выбираем рандомно один из ключей
+        const types = Object.keys(images); // ["diamond", "emerald", "ruby"]
+        const choice = types[Math.floor(Math.random() * types.length)];
+
+        const obj = new Gem(x, y, images[choice].image, masks[choice]);
+
+        let attempts = 100;
+        while ((obj.checkCollisions() || obj.causesFloorCollision(obj.y)) && attempts > 0) {
+            obj.y -= 1;
+            attempts--;
+        }
+
+        if (attempts > 0) {
+            objects.push(obj);
+        }
+        // Если attempts == 0, значит не удалось разместить без пересечения, просто не добавляем объект.
     }
 
     canvas.addEventListener("click", (e) => {
@@ -156,8 +189,7 @@
         const centerX = e.clientX - rect.left;
         const centerY = e.clientY - rect.top;
 
-        // Центрируем объект по точке клика
-        objects.push(new Diamond(centerX - 25, centerY - 25));
+        placeObject(centerX - 25, centerY - 25);
     });
 
     function animate() {
@@ -169,10 +201,18 @@
         requestAnimationFrame(animate);
     }
 
-    image.onload = () => {
-        globalMask = createGlobalMask(image, 50, 50);
-        animate();
-    };
+    // Подгрузка всех изображений и создание масок
+    let imagesLoaded = 0;
+    for (let key in images) {
+        images[key].image.onload = () => {
+            masks[key] = createMask(images[key].image, OBJ_WIDTH, OBJ_HEIGHT);
+            imagesLoaded++;
+            if (imagesLoaded === Object.keys(images).length) {
+                // Все изображения загружены
+                animate();
+            }
+        };
+    }
 </script>
 </body>
 </html>
