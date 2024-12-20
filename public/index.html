@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Perfect Stack</title>
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background-color: #f0f0f0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<canvas id="fallingCanvas"></canvas>
+<script>
+    const canvas = document.getElementById("fallingCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const gravity = 0.5;
+    const objects = [];
+
+    const image = new Image();
+    image.src = "image.png";
+
+    let globalMask = null; // Глобальная маска, будет вычислена один раз
+
+    // Создаём маску для всех объектов
+    function createGlobalMask(img, width, height) {
+        const offscreen = document.createElement("canvas");
+        const offCtx = offscreen.getContext("2d");
+        offscreen.width = width;
+        offscreen.height = height;
+
+        offCtx.drawImage(img, 0, 0, width, height);
+        const imgData = offCtx.getImageData(0, 0, width, height);
+
+        const mask = [];
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const alpha = imgData.data[(y * width + x) * 4 + 3];
+                if (alpha > 0) mask.push({ x, y });
+            }
+        }
+        return mask;
+    }
+
+    class Diamond {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.vy = 0;
+            this.width = 50;
+            this.height = 50;
+            this.mask = globalMask; // Используем уже готовую маску
+            this.stable = false;    // Флаг стабильности
+        }
+
+        applyGravity() {
+            this.vy += gravity;
+        }
+
+        // Проверка пересечения по ограничивающим прямоугольникам (AABB)
+        aabbCollide(other) {
+            return !(this.x + this.width <= other.x ||
+                     this.x >= other.x + other.width ||
+                     this.y + this.height <= other.y ||
+                     this.y >= other.y + other.height);
+        }
+
+        // Пиксель-перфект проверка. Предполагается, что перед этим уже пройдена AABB проверка.
+        pixelPerfectCollide(other) {
+            for (let { x, y } of this.mask) {
+                const globalX = (this.x | 0) + x;
+                const globalY = (this.y | 0) + y;
+                for (let { x: ox, y: oy } of other.mask) {
+                    const otherX = (other.x | 0) + ox;
+                    const otherY = (other.y | 0) + oy;
+
+                    if (globalX === otherX && globalY === otherY) return true;
+                }
+            }
+            return false;
+        }
+
+        // Проверка коллизий с другими объектами
+        checkCollisionsAt(yPos) {
+            const oldY = this.y;
+            this.y = yPos;
+            const collides = this.checkCollisions();
+            this.y = oldY;
+            return collides;
+        }
+
+        checkCollisions() {
+            for (const other of objects) {
+                if (other === this) continue;
+                if (this.aabbCollide(other)) {
+                    if (this.pixelPerfectCollide(other)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        causesFloorCollision(yPos) {
+            return yPos + this.height > canvas.height;
+        }
+
+        // Двоичный поиск для определения оптимальной позиции без глубокой коллизии
+        resolveCollisions(oldY, newY) {
+            if (!this.checkCollisionsAt(newY) && !this.causesFloorCollision(newY)) {
+                return newY; 
+            }
+            if (this.checkCollisionsAt(oldY) || this.causesFloorCollision(oldY)) {
+                return oldY; 
+            }
+
+            let low = oldY;
+            let high = newY;
+            let finalPos = oldY;
+
+            for (let i = 0; i < 20; i++) {
+                let mid = (low + high) / 2;
+                if (this.checkCollisionsAt(mid) || this.causesFloorCollision(mid)) {
+                    high = mid;
+                } else {
+                    finalPos = mid;
+                    low = mid;
+                }
+            }
+
+            return Math.floor(finalPos);
+        }
+
+        update() {
+            // Если объект стабилен, пропускаем сложные вычисления
+            if (this.stable) return;
+
+            const oldY = this.y;
+            this.applyGravity();
+            const newY = this.y + this.vy;
+
+            const resolvedY = this.resolveCollisions(oldY, newY);
+            this.y = resolvedY;
+
+            // Проверяем, остановился ли объект
+            if (this.checkCollisionsAt(this.y) || this.causesFloorCollision(this.y) || resolvedY !== newY) {
+                this.y = Math.floor(this.y);
+                this.vy = 0;
+                this.stable = true; // Объект стал стабильным
+            }
+        }
+
+        draw() {
+            ctx.drawImage(image, this.x, this.y, this.width, this.height);
+        }
+    }
+
+    // Добавление новых объектов по клику
+    canvas.addEventListener("click", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        objects.push(new Diamond(x, y));
+    });
+
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let obj of objects) {
+            obj.update();
+            obj.draw();
+        }
+        requestAnimationFrame(animate);
+    }
+
+    image.onload = () => {
+        // Генерируем маску один раз
+        globalMask = createGlobalMask(image, 50, 50);
+        animate();
+    };
+</script>
+</body>
+</html>
